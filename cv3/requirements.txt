@@ -1,0 +1,8 @@
+# Base ----------------------------------------
+opencv-contrib-python
+matplotlib
+numpy
+tornado
+pyautogui
+keyboard
+time
