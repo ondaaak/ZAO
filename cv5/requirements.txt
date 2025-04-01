@@ -1,0 +1,4 @@
+# Base ----------------------------------------
+opencv-contrib-python
+matplotlib
+numpy
