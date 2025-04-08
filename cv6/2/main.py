@@ -49,7 +49,7 @@ def process_video_with_training_and_prediction(video_path, eye_cascade_path, gro
         if frame_count < train_frames:
             for (x, y, w, h) in eyes:
                 eye = gray[y:y+h, x:x+w]
-                eye_resized = cv2.resize(eye, (64, 128))
+                eye_resized = cv2.resize(eye, (64, 64))
                 hist = extract_lbp_features(eye_resized, lbp_config["radius"], lbp_config["n_points"])
 
                 if frame_count < len(ground_truth):
@@ -66,7 +66,7 @@ def process_video_with_training_and_prediction(video_path, eye_cascade_path, gro
             for (x, y, w, h) in eyes:
                 
                 eye = gray[y:y+h, x:x+w]
-                eye_resized = cv2.resize(eye, (64, 128))
+                eye_resized = cv2.resize(eye, (64, 64))
                 hist = extract_lbp_features(eye_resized, lbp_config["radius"], lbp_config["n_points"])
                 prediction = model.predict([hist])[0]
 
