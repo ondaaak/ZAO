@@ -17,7 +17,7 @@ def extract_lbp_features(image, radius, n_points):
     hist /= hist.sum()
     return hist
 
-def process_video_with_training_and_prediction(video_path, eye_cascade_path, ground_truth_file, lbp_config, split_ratio=0.2):
+def process_video_with_training_and_prediction(video_path, eye_cascade_path, ground_truth_file, lbp_config, split_ratio=0.5):
     cap = cv2.VideoCapture(video_path)
     eye_cascade = cv2.CascadeClassifier(eye_cascade_path)
     ground_truth = load_ground_truth(ground_truth_file)
