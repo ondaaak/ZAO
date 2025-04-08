@@ -1,0 +1,7 @@
+# Base ----------------------------------------
+opencv-contrib-python
+matplotlib
+numpy
+scikit-image
+scikit-learn
+time
