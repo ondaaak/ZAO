@@ -16,7 +16,7 @@ def extract_lbp_features(image, radius, n_points):
     hist /= hist.sum()
     return hist
 
-def process_video(video_path, eye_cascade_path, ground_truth_file, lbp_config):
+def process_video_with_training_and_prediction(video_path, eye_cascade_path, ground_truth_file, lbp_config, split_ratio=0.2):
     cap = cv2.VideoCapture(video_path)
     eye_cascade = cv2.CascadeClassifier(eye_cascade_path)
     ground_truth = load_ground_truth(ground_truth_file)
@@ -25,34 +25,10 @@ def process_video(video_path, eye_cascade_path, ground_truth_file, lbp_config):
     features = []
     labels = []
 
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) 
+    train_frames = int(total_frames * split_ratio) 
 
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        eyes = eye_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
-
-        for (x, y, w, h) in eyes:
-            eye = gray[y:y+h, x:x+w]
-            eye_resized = cv2.resize(eye, (64, 128))
-            hist = extract_lbp_features(eye_resized, lbp_config["radius"], lbp_config["n_points"])
-
-            if frame_count < len(ground_truth):
-                features.append(hist)
-                labels.append(ground_truth[frame_count])
-
-        frame_count += 1
-
-    cap.release()
-    return np.array(features), np.array(labels)
-
-def process_and_visualize_video(video_path, eye_cascade_path, model, lbp_config, ground_truth_file):
-    cap = cv2.VideoCapture(video_path)
-    eye_cascade = cv2.CascadeClassifier(eye_cascade_path)
-    ground_truth = load_ground_truth(ground_truth_file)
-
-    frame_count = 0
+    model = None 
 
     while cap.isOpened():
         ret, frame = cap.read()
@@ -60,31 +36,46 @@ def process_and_visualize_video(video_path, eye_cascade_path, model, lbp_config,
             break
 
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-        height, width = gray.shape
-        gray = gray[:height // 2, :]  # Pouze horní polovina
+        gray = gray[:gray.shape[0] // 2, :] 
 
         eyes = eye_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
 
-         # Pokud jsou detekovány více než dvě oči, vybereme dvě největší
         if len(eyes) > 2:
-            eyes = sorted(eyes, key=lambda e: e[2] * e[3], reverse=True)[:2]  # Seřadíme podle velikosti a vezmeme 2 největší
+            eyes = sorted(eyes, key=lambda e: e[2] * e[3], reverse=True)[:2]
 
+        if frame_count < train_frames:
+            for (x, y, w, h) in eyes:
+                eye = gray[y:y+h, x:x+w]
+                eye_resized = cv2.resize(eye, (64, 128))
+                hist = extract_lbp_features(eye_resized, lbp_config["radius"], lbp_config["n_points"])
 
-        for (x, y, w, h) in eyes:
-            eye = gray[y:y+h, x:x+w]
-            eye_resized = cv2.resize(eye, (64, 128))
-            hist = extract_lbp_features(eye_resized, lbp_config["radius"], lbp_config["n_points"])
-            prediction = model.predict([hist])[0]
+                if frame_count < len(ground_truth):
+                    features.append(hist)
+                    labels.append(ground_truth[frame_count])
 
-            # Choose color based on prediction
-            color = (0, 255, 0) if prediction == 0 else (0, 0, 255)  # Green for open, Red for closed
-            cv2.rectangle(frame, (x, y), (x+w, y+h), color, 2)
+            cv2.putText(frame, "Training...", (10, 30), cv2.FONT_HERSHEY_PLAIN, 1, (255, 255, 255), 2, cv2.LINE_AA)
 
-        # Display the frame
+        else:
+            if model is None:
+                print("Training")
+                model = SVC(kernel="poly")
+                model.fit(features, labels)
+
+            for (x, y, w, h) in eyes:
+                eye = gray[y:y+h, x:x+w]
+                eye_resized = cv2.resize(eye, (64, 128))
+                hist = extract_lbp_features(eye_resized, lbp_config["radius"], lbp_config["n_points"])
+                prediction = model.predict([hist])[0]
+
+                color = (0, 255, 0) if prediction == 0 else (0, 0, 255) 
+                cv2.rectangle(frame, (x, y), (x+w, y+h), color, 2)
+
+            cv2.putText(frame, "Predicting...", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+
         cv2.imshow("Eye State Detection", frame)
-
-        # Break the loop if 'q' is pressed
+        #sleep_time = 0.1 
+        #cv2.waitKey(int(sleep_time * 500))
+        
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
@@ -94,24 +85,9 @@ def process_and_visualize_video(video_path, eye_cascade_path, model, lbp_config,
     cv2.destroyAllWindows()
 
 def main():
-    video_path = "fusek_face_car_01.avi"
-    eye_cascade_path = "eye_cascade_fusek.xml"
-    ground_truth_file = "eye-state.txt"
 
     lbp_config = {"radius": 2, "n_points": 16}
-
-    # Extract features and labels from video for training
-    print("Extracting features and labels from video...")
-    features, labels = process_video(video_path, eye_cascade_path, ground_truth_file, lbp_config)
-
-    # Train SVM model
-    print("Training SVM model...")
-    model = SVC(kernel="poly")
-    model.fit(features, labels)
-
-    # Visualize video with predictions
-    print("Visualizing video with predictions...")
-    process_and_visualize_video(video_path, eye_cascade_path, model, lbp_config, ground_truth_file)
+    process_video_with_training_and_prediction("fusek_face_car_01.avi", "eye_cascade_fusek.xml", "eye-state.txt", lbp_config)
 
 if __name__ == "__main__":
     main()
