@@ -4,6 +4,7 @@ import numpy as np
 from skimage.feature import local_binary_pattern
 from sklearn.svm import SVC
 from sklearn.metrics import accuracy_score
+import time 
 
 def load_ground_truth(file_path):
     with open(file_path, "r") as f:
@@ -16,7 +17,7 @@ def extract_lbp_features(image, radius, n_points):
     hist /= hist.sum()
     return hist
 
-def process_video_with_training_and_prediction(video_path, eye_cascade_path, ground_truth_file, lbp_config, split_ratio=0.2):
+def process_video_with_training_and_prediction(video_path, eye_cascade_path, ground_truth_file, lbp_config, split_ratio=0.5):
     cap = cv2.VideoCapture(video_path)
     eye_cascade = cv2.CascadeClassifier(eye_cascade_path)
     ground_truth = load_ground_truth(ground_truth_file)
@@ -31,6 +32,8 @@ def process_video_with_training_and_prediction(video_path, eye_cascade_path, gro
     model = None 
 
     while cap.isOpened():
+        start_time = time.time()  
+
         ret, frame = cap.read()
         if not ret:
             break
@@ -46,35 +49,36 @@ def process_video_with_training_and_prediction(video_path, eye_cascade_path, gro
         if frame_count < train_frames:
             for (x, y, w, h) in eyes:
                 eye = gray[y:y+h, x:x+w]
-                eye_resized = cv2.resize(eye, (64, 128))
+                eye_resized = cv2.resize(eye, (64, 64))
                 hist = extract_lbp_features(eye_resized, lbp_config["radius"], lbp_config["n_points"])
 
                 if frame_count < len(ground_truth):
                     features.append(hist)
                     labels.append(ground_truth[frame_count])
 
-            cv2.putText(frame, "Training...", (10, 30), cv2.FONT_HERSHEY_PLAIN, 1, (255, 255, 255), 2, cv2.LINE_AA)
+            cv2.putText(frame, "Training...", (10, 30), cv2.FONT_HERSHEY_PLAIN, 1, (255, 255, 255), 1, cv2.LINE_AA)
 
         else:
             if model is None:
-                print("Training")
                 model = SVC(kernel="poly")
                 model.fit(features, labels)
-
+            
             for (x, y, w, h) in eyes:
+                
                 eye = gray[y:y+h, x:x+w]
-                eye_resized = cv2.resize(eye, (64, 128))
+                eye_resized = cv2.resize(eye, (64, 64))
                 hist = extract_lbp_features(eye_resized, lbp_config["radius"], lbp_config["n_points"])
                 prediction = model.predict([hist])[0]
 
                 color = (0, 255, 0) if prediction == 0 else (0, 0, 255) 
                 cv2.rectangle(frame, (x, y), (x+w, y+h), color, 2)
+          
+            cv2.putText(frame, "Predicting...", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1, cv2.LINE_AA)
 
-            cv2.putText(frame, "Predicting...", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+            processing_time = time.time() - start_time
+            cv2.putText(frame, f"Processing time: {processing_time:.2f}s", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 1, cv2.LINE_AA)
 
         cv2.imshow("Eye State Detection", frame)
-        #sleep_time = 0.1 
-        #cv2.waitKey(int(sleep_time * 500))
         
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
@@ -84,6 +88,7 @@ def process_video_with_training_and_prediction(video_path, eye_cascade_path, gro
     cap.release()
     cv2.destroyAllWindows()
 
+    
 def main():
 
     lbp_config = {"radius": 2, "n_points": 16}
